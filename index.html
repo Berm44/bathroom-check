@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Restroom Smart System</title>
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/jpeg" href="https://i.ibb.co/TxhX0c8y/image.jpg">
+  <link rel="apple-touch-icon" href="https://i.ibb.co/TxhX0c8y/image.jpg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@200;300;400;500;600;700;800&display=swap"
+    rel="stylesheet">
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+  <!-- Supabase JavaScript Client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    /* CSS เดิมทั้งหมด ไม่มีการเปลี่ยนแปลง */
+    :root {
+      --primary: #818cf8;
+      --primary-rgb: 129, 140, 248;
+      --accent: #c084fc;
+      --accent-rgb: 192, 132, 252;
+      --cyan: #22d3ee;
+      --cyan-rgb: 34, 211, 238;
+      --primary-gradient: linear-gradient(135deg, #818cf8 0%, #a78bfa 40%, #c084fc 100%);
+      --glass-surface: rgba(255, 255, 255, 0.04);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --shadow-soft: 0 10px 40px rgba(0, 0, 0, 0.4);
+      --success-green: #34d399;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Kanit', sans-serif;
+      min-height: 100vh;
+      background: #080510;
+      color: var(--text-main);
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 20px;
+      overflow-x: hidden;
+    }
+
+    /* === ANIMATED MESH BACKGROUND === */
+    .bg-mesh {
+      position: fixed;
+      inset: 0;
+      z-index: -3;
+      overflow: hidden;
+    }
+    .bg-orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.5;
+      animation: orbFloat 20s ease-in-out infinite alternate;
+    }
+    .bg-orb:nth-child(1) {
+      width: 500px;
+      height: 500px;
+      top: -10%;
+      left: -5%;
+      background: rgba(var(--primary-rgb), 0.3);
+      animation-duration: 18s;
+    }
+    .bg-orb:nth-child(2) {
+      width: 400px;
+      height: 400px;
+      bottom: -10%;
+      right: -5%;
+      background: rgba(var(--accent-rgb), 0.25);
+      animation-duration: 22s;
+      animation-delay: -5s;
+    }
+    .bg-orb:nth-child(3) {
+      width: 350px;
+      height: 350px;
+      top: 40%;
+      left: 50%;
+      background: rgba(var(--cyan-rgb), 0.12);
+      animation-duration: 25s;
+      animation-delay: -10s;
+    }
+    @keyframes orbFloat {
+      0% { transform: translate(0,0) scale(1); }
+      33% { transform: translate(30px, -40px) scale(1.1); }
+      66% { transform: translate(-20px, 30px) scale(0.95); }
+      100% { transform: translate(15px, -15px) scale(1.05); }
+    }
+
+    /* School image overlay */
+    .bg-school {
+      position: fixed;
+      inset: 0;
+      z-index: -2;
+      background-image: url('https://scontent.fcnx4-2.fna.fbcdn.net/v/t39.30808-6/575086126_1621357925920930_991978821720519793_n.jpg?_nc_cat=105&ccb=1-7&_nc_sid=cc71e4&_nc_ohc=eiDU-iOgOpQQ7kNvwF1HOoS&_nc_oc=AdkB1BPgnF8bteuHg3FZQV0aGs0x-MrhXb7Zb1F0tflDjH0j9M-cBsCb12iBuEM7c2Y&_nc_zt=23&_nc_ht=scontent.fcnx4-2.fna&_nc_gid=Qamp_Y9zAtVEAP-aFsquRw&oh=00_AfspOGSJselHkQ_GeLHU3FdtOOXhDMzeTIYQYgdYJwd2wQ&oe=6993BEA8');
+      background-size: cover;
+      background-position: center;
+      opacity: 0.06;
+    }
+
+    /* Noise texture overlay */
+    .bg-noise {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      opacity: 0.03;
+      pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+      background-repeat: repeat;
+      background-size: 256px;
+    }
+
+    /* === LAYOUT === */
+    .dashboard-container {
+      width: 100%;
+      max-width: 1200px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 24px;
+      animation: pageEnter 1s cubic-bezier(0.16, 1, 0.3, 1);
+      padding-top: 10px;
+    }
+    @media (min-width: 900px) {
+      .dashboard-container { grid-template-columns: 380px 1fr; align-items: start; }
+    }
+    @keyframes pageEnter {
+      from { opacity: 0; transform: translateY(30px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* === GLASS CARD === */
+    .glass-card {
+      background: var(--glass-surface);
+      border: 1px solid var(--glass-border);
+      border-radius: 24px;
+      padding: 32px;
+      box-shadow: var(--shadow-soft), inset 0 1px 0 rgba(255,255,255,0.04);
+      backdrop-filter: blur(20px);
+      position: relative;
+      overflow: hidden;
+      transition: all 0.4s cubic-bezier(0.4,0,0.2,1);
+    }
+    .glass-card::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(var(--primary-rgb),0.3), transparent);
+    }
+    .glass-card:hover {
+      border-color: rgba(var(--primary-rgb),0.15);
+      box-shadow: var(--shadow-soft), 0 0 40px rgba(var(--primary-rgb),0.06);
+    }
+
+    /* === CONTROL PANEL === */
+    .control-panel { display: flex; flex-direction: column; align-items: center; text-align: center; }
+
+    /* 3D Logo Styles */
+    .logo-container {
+      width: 120px; height: 120px; margin-bottom: 24px;
+      position: relative; perspective: 1000px; cursor: pointer;
+    }
+    .logo-3d {
+      width: 100%; height: 100%;
+      position: relative; transform-style: preserve-3d;
+      animation: spinLogo 8s infinite linear;
+      transition: transform 0.1s;
+    }
+    .logo-face {
+      position: absolute; width: 100%; height: 100%; border-radius: 50%;
+      overflow: hidden; backface-visibility: hidden;
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, rgba(var(--primary-rgb),0.2), rgba(var(--accent-rgb),0.2));
+      box-shadow: 0 0 40px rgba(var(--primary-rgb),0.15);
+      border: 2px solid rgba(var(--primary-rgb),0.3);
+    }
+    .logo-face.front { transform: rotateY(0deg); }
+    .logo-face.back { transform: rotateY(180deg); }
+    .logo-face img { width: 90%; height: 90%; object-fit: contain; border-radius: 50%; filter: drop-shadow(0 0 10px rgba(var(--primary-rgb),0.3)); }
+    .glow-ring {
+      position: absolute; inset: -5px; border-radius: 50%;
+      background: conic-gradient(from 0deg, rgba(var(--primary-rgb),0.6), rgba(var(--accent-rgb),0.6), rgba(var(--cyan-rgb),0.6), rgba(var(--primary-rgb),0.6));
+      filter: blur(8px); opacity: 0.5; animation: glowRotate 4s linear infinite; z-index: -1;
+    }
+    @keyframes spinLogo { 0% { transform: rotateY(0deg); } 100% { transform: rotateY(360deg); } }
+    @keyframes glowRotate { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    /* Clock */
+    .digital-clock {
+      font-size: 4.5rem; font-weight: 800;
+      background: var(--primary-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      line-height: 1; margin-bottom: 4px; font-variant-numeric: tabular-nums; letter-spacing: -3px;
+      filter: drop-shadow(0 0 25px rgba(var(--primary-rgb),0.3));
+      animation: clockPulse 4s ease-in-out infinite;
+    }
+    @keyframes clockPulse { 0%,100% { filter: drop-shadow(0 0 25px rgba(var(--primary-rgb),0.3)); } 50% { filter: drop-shadow(0 0 35px rgba(var(--primary-rgb),0.5)); } }
+    .date-display { font-size: 1rem; color: var(--text-muted); margin-bottom: 32px; font-weight: 300; letter-spacing: 1px; }
+
+    /* Divider */
+    .panel-divider { width: 60%; height: 1px; border: none; margin: 0 auto 24px; background: linear-gradient(90deg, transparent, rgba(var(--primary-rgb),0.25), transparent); }
+
+    /* Input */
+    .input-wrapper { width: 100%; position: relative; }
+    .input-label {
+      display: flex; align-items: center; gap: 8px; text-align: left; margin-bottom: 12px;
+      font-weight: 500; font-size: 0.95rem; color: var(--text-muted); margin-left: 6px; letter-spacing: 0.3px;
+    }
+    .modern-input-group {
+      display: flex; align-items: center; background: rgba(255,255,255,0.04); padding: 5px;
+      border-radius: 60px; border: 1.5px solid rgba(255,255,255,0.06);
+      transition: all 0.4s cubic-bezier(0.4,0,0.2,1); position: relative;
+    }
+    .modern-input-group::before {
+      content: ""; position: absolute; inset: -1px; border-radius: 60px;
+      background: conic-gradient(from 180deg, transparent 60%, rgba(var(--primary-rgb),0) 80%, transparent);
+      z-index: -1; opacity: 0; transition: opacity 0.4s;
+    }
+    .modern-input-group:focus-within {
+      border-color: rgba(var(--primary-rgb),0.4);
+      box-shadow: 0 0 40px rgba(var(--primary-rgb),0.12), 0 8px 32px rgba(0,0,0,0.2);
+      transform: translateY(-2px); background: rgba(255,255,255,0.06);
+    }
+    .modern-input-group:focus-within::before { opacity: 1; }
+    .modern-input-group input {
+      flex: 1; border: none; outline: none; padding: 14px 20px; font-size: 1.15rem;
+      font-family: 'Kanit'; background: transparent; color: #fff; width: 100%; font-weight: 300;
+    }
+    .modern-input-group input::placeholder { color: rgba(255,255,255,0.2); font-weight: 200; }
+
+    /* Submit Button */
+    .btn-submit {
+      width: 50px; height: 50px; border-radius: 50%; border: none; background: var(--primary-gradient);
+      color: white; font-size: 1.4rem; cursor: pointer; display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 20px rgba(var(--primary-rgb),0.35);
+      transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1); flex-shrink: 0; position: relative; overflow: hidden;
+    }
+    .btn-submit::after {
+      content: ""; position: absolute; inset: 0; border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.3), transparent 60%);
+    }
+    .btn-submit:hover { transform: scale(1.15); box-shadow: 0 0 30px rgba(var(--primary-rgb),0.5); }
+    .btn-submit:active { transform: scale(0.9); }
+
+    /* Back Button */
+    .btn-back {
+      width: 100%; padding: 13px 20px; border: none; border-radius: 60px;
+      background: rgba(255,255,255,0.04); color: var(--text-muted); font-family: 'Kanit';
+      font-size: 0.95rem; font-weight: 400; cursor: pointer; transition: all 0.3s; margin-top: 16px;
+      border: 1px solid rgba(255,255,255,0.06); display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-back:hover {
+      background: rgba(255,255,255,0.08); color: var(--text-main);
+      transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+    }
+    .btn-back:active { transform: translateY(0); }
+    .btn-back i { font-size: 1.1rem; }
+
+    /* === MONITOR PANEL === */
+    .monitor-panel { display: flex; flex-direction: column; gap: 24px; }
+
+    .section-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .section-title {
+      font-size: 1.15rem; font-weight: 500; display: flex; align-items: center; gap: 10px; color: var(--text-muted);
+    }
+    .section-title i { color: var(--primary); font-size: 1.3rem; }
+    .badge-count {
+      background: var(--primary-gradient); color: white; padding: 3px 12px; border-radius: 20px;
+      font-size: 0.85rem; font-weight: 600; box-shadow: 0 2px 12px rgba(var(--primary-rgb),0.3);
+      animation: badgePulse 3s ease-in-out infinite;
+    }
+    @keyframes badgePulse { 0%,100% { box-shadow: 0 2px 12px rgba(var(--primary-rgb),0.3); } 50% { box-shadow: 0 2px 20px rgba(var(--primary-rgb),0.5); } }
+
+    #list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+
+    /* === STUDENT CARD === */
+    .student-card {
+      background: rgba(255,255,255,0.03); border-radius: 18px; padding: 18px;
+      display: flex; align-items: center; justify-content: space-between;
+      border: 1px solid rgba(255,255,255,0.06); cursor: pointer; position: relative; overflow: hidden;
+      transition: all 0.35s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    .student-card::before {
+      content: ""; position: absolute; top: 0; left: -100%; width: 60%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
+      transition: left 0.6s; pointer-events: none;
+    }
+    .student-card:hover::before { left: 150%; }
+    .student-card:hover {
+      transform: translateY(-3px) scale(1.01); border-color: rgba(var(--primary-rgb),0.2);
+      box-shadow: 0 12px 35px rgba(0,0,0,0.2), 0 0 20px rgba(var(--primary-rgb),0.05);
+      background: rgba(255,255,255,0.05);
+    }
+    .card-info { display: flex; align-items: center; gap: 14px; }
+    .avatar-placeholder {
+      width: 46px; height: 46px; border-radius: 14px; background: rgba(var(--primary-rgb),0.1);
+      color: var(--primary); display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem; flex-shrink: 0; border: 1px solid rgba(var(--primary-rgb),0.15);
+    }
+    .student-name { font-weight: 500; font-size: 1.05rem; line-height: 1.2; color: var(--text-main); }
+    .student-class { font-size: 0.85rem; color: var(--text-muted); margin-top: 2px; font-weight: 300; }
+    .time-val {
+      font-size: 1.5rem; font-weight: 700; color: var(--text-main);
+      text-align: right; font-variant-numeric: tabular-nums;
+    }
+    .status-pill {
+      font-size: 0.7rem; padding: 3px 10px; border-radius: 20px; display: inline-block;
+      margin-top: 4px; font-weight: 500; letter-spacing: 0.5px; text-transform: uppercase;
+    }
+    .status-ok { background: rgba(52,211,153,0.1); color: #34d399; border: 1px solid rgba(52,211,153,0.15); }
+    .status-late { background: rgba(248,113,113,0.1); color: #f87171; border: 1px solid rgba(248,113,113,0.15); animation: pulse-red 2s infinite; }
+
+    /* === RANKING === */
+    .ranking-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,0.04);
+      transition: all 0.25s; border-radius: 12px;
+    }
+    .ranking-item:last-child { border-bottom: none; }
+    .ranking-item:hover { background: rgba(255,255,255,0.03); transform: translateX(4px); }
+    .rank-num {
+      width: 30px; height: 30px; border-radius: 10px; background: rgba(255,255,255,0.06);
+      color: var(--text-muted); font-size: 0.8rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center; margin-right: 14px; flex-shrink: 0;
+    }
+    .rank-1 { background: linear-gradient(135deg, #ffd700, #f59e0b); color: #1a0e00; box-shadow: 0 3px 12px rgba(245,158,11,0.3); }
+    .rank-2 { background: linear-gradient(135deg, #94a3b8, #64748b); color: white; }
+    .rank-3 { background: linear-gradient(135deg, #fb923c, #ea580c); color: white; box-shadow: 0 3px 10px rgba(234,88,12,0.2); }
+
+    /* === POPUP === */
+    .popup-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(20px);
+      z-index: 9999; display: flex; align-items: center; justify-content: center;
+      opacity: 0; visibility: hidden; transition: all 0.35s;
+    }
+    .popup-overlay.show { opacity: 1; visibility: visible; }
+    .popup-box {
+      background: linear-gradient(160deg, rgba(20,12,45,0.97), rgba(10,8,25,0.98));
+      width: 90%; max-width: 400px; padding: 44px 32px 36px; border-radius: 32px; text-align: center;
+      position: relative; overflow: hidden;
+      box-shadow: 0 30px 100px rgba(0,0,0,0.6), 0 0 60px rgba(var(--primary-rgb),0.1);
+      border: 1px solid rgba(255,255,255,0.08);
+      transform: scale(0.85) translateY(20px);
+      transition: all 0.5s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    .popup-box::before {
+      content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: var(--primary-gradient);
+    }
+    .popup-box::after {
+      content: ""; position: absolute; inset: 0;
+      background: radial-gradient(circle at 50% 0%, rgba(var(--primary-rgb),0.08), transparent 60%);
+      pointer-events: none;
+    }
+    .popup-overlay.show .popup-box { transform: scale(1) translateY(0); }
+    .popup-icon-container { height: 90px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; position: relative; z-index: 1; }
+    .popup-icon { font-size: 5rem; display: block; line-height: 1; }
+    .success-icon-animated { color: var(--success-green); animation: springCheck 0.6s cubic-bezier(0.175,0.885,0.32,1.275) forwards; filter: drop-shadow(0 0 20px rgba(52,211,153,0.4)); }
+    @keyframes springCheck {
+      0% { transform: scale(0) rotate(-45deg); opacity: 0; }
+      60% { transform: scale(1.2) rotate(0deg); opacity: 1; }
+      100% { transform: scale(1) rotate(0deg); opacity: 1; }
+    }
+    .popup-title { font-size: 1.7rem; margin: 0 0 8px 0; color: var(--text-main); font-weight: 700; position: relative; z-index: 1; }
+    .popup-subtitle { font-size: 1rem; color: var(--text-muted); margin: 0; line-height: 1.6; position: relative; z-index: 1; font-weight: 300; }
+    .popup-highlight { color: var(--primary); font-weight: 600; font-size: 1.15rem; }
+
+    /* Popup particles */
+    .popup-particles { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+    .popup-particle { position: absolute; border-radius: 50%; animation: particleFloat 3s ease-out forwards; }
+    @keyframes particleFloat {
+      0% { transform: translate(0,0) scale(1); opacity: 0.8; }
+      100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+    }
+
+    /* === ANIMATIONS === */
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes pulse-red { 0% { box-shadow: 0 0 0 0 rgba(248,113,113,0.3); } 70% { box-shadow: 0 0 0 6px rgba(248,113,113,0); } 100% { box-shadow: 0 0 0 0 rgba(248,113,113,0); } }
+
+    .empty-state {
+      grid-column: 1 / -1; text-align: center; padding: 60px 20px; color: var(--text-muted);
+      background: rgba(255,255,255,0.02); border-radius: 18px; border: 1px dashed rgba(255,255,255,0.06);
+    }
+    .empty-state i { display: block; margin-bottom: 12px; animation: emptyBounce 3s ease-in-out infinite; }
+    @keyframes emptyBounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+
+    .dev-credit {
+      position: fixed; bottom: 12px; right: 12px; background: rgba(255,255,255,0.03);
+      padding: 5px 12px; border-radius: 20px; color: rgba(255,255,255,0.25); font-size: 0.7rem;
+      pointer-events: none; backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.04);
+      letter-spacing: 0.5px;
+    }
+
+    /* Clear stats button */
+    .btn-clear {
+      background: none; border: 1px solid rgba(255,255,255,0.06); color: var(--text-muted);
+      cursor: pointer; font-size: 0.75rem; padding: 4px 12px; border-radius: 20px;
+      font-family: 'Kanit'; transition: all 0.2s;
+    }
+    .btn-clear:hover { background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.2); color: #f87171; }
+
+    .hint-text { color: var(--text-muted); font-size: 0.8rem; font-weight: 300; opacity: 0.7; }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+  </style>
+</head>
+
+<body>
+
+  <!-- Background effects -->
+  <div class="bg-mesh"><div class="bg-orb"></div><div class="bg-orb"></div><div class="bg-orb"></div></div>
+  <div class="bg-school"></div>
+  <div class="bg-noise"></div>
+
+  <!-- Popup -->
+  <div id="popupOverlay" class="popup-overlay">
+    <div class="popup-box">
+      <div class="popup-particles"></div>
+      <div id="popupIconContainer" class="popup-icon-container"></div>
+      <h2 id="popupTitle" class="popup-title"></h2>
+      <p id="popupSubtitle" class="popup-subtitle"></p>
+    </div>
+  </div>
+
+  <main class="dashboard-container">
+
+    <!-- Left: Control Panel -->
+    <section class="glass-card control-panel">
+      <div class="logo-container">
+        <div class="glow-ring"></div>
+        <div class="logo-3d">
+          <div class="logo-face front">
+            <img src="https://media.discordapp.net/attachments/1282030855119966349/1471524189373599795/23c307897ed1e453.png?ex=698f3f32&is=698dedb2&hm=69b22e5494a63341d8d75bbc5496eb2dc1f6045d0cf1fe98818aeb8bcedf6b35&=&format=webp&quality=lossless&width=648&height=648" alt="Logo Front">
+          </div>
+          <div class="logo-face back">
+            <img src="https://media.discordapp.net/attachments/1282030855119966349/1471524189373599795/23c307897ed1e453.png?ex=698f3f32&is=698dedb2&hm=69b22e5494a63341d8d75bbc5496eb2dc1f6045d0cf1fe98818aeb8bcedf6b35&=&format=webp&quality=lossless&width=648&height=648" alt="Logo Back">
+          </div>
+        </div>
+      </div>
+
+      <div id="liveClock" class="digital-clock">00:00</div>
+      <div id="liveDate" class="date-display">...</div>
+
+      <hr class="panel-divider">
+
+      <div class="input-wrapper">
+        <label class="input-label"><i class="ph ph-identification-card" style="font-size:1.1rem;"></i> ลงชื่อเข้าใช้ห้องน้ำ</label>
+        <div class="modern-input-group">
+          <input id="studentId" type="tel" placeholder="กรอกเลขนักเรียน..." autocomplete="off">
+          <button class="btn-submit" onclick="addStudent()"><i class="ph-bold ph-paper-plane-right"></i></button>
+        </div>
+      </div>
+
+      <button onclick="goToMainMenu()" class="btn-back"><i class="ph ph-arrow-left"></i> กลับเมนูหลัก</button>
+    </section>
+
+    <!-- Right: Monitor Panel -->
+    <section class="monitor-panel">
+
+      <div class="glass-card" style="flex:1;">
+        <div class="section-header">
+          <div class="section-title"><i class="ph-fill ph-toilet"></i> กำลังใช้งาน <span id="activeCount" class="badge-count">0</span></div>
+          <span class="hint-text">แตะการ์ดเมื่อกลับมา</span>
+        </div>
+        <div id="list"></div>
+      </div>
+
+      <div class="glass-card">
+        <div class="section-header" style="margin-bottom:8px; border-bottom:none;">
+          <div class="section-title" style="font-size:1.05rem;"><i class="ph-fill ph-trophy" style="color:#f59e0b;"></i> 5 อันดับเข้าบ่อย</div>
+          <button onclick="clearStats()" class="btn-clear">ล้างค่า</button>
+        </div>
+        <div id="rankingList"></div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <div class="dev-credit"><i class="ph-bold ph-code"></i> Dev By 6/7</div>
+
+  <!-- Supabase Script -->
+  <script>
+    (function() {
+      // ===== กำหนดค่า Supabase =====
+      const SUPABASE_URL = 'https://gfvrvhlchpdjwlbeszfw.supabase.co';
+      const SUPABASE_ANON_KEY = 'sb_publishable_6MUxEKIxsDRED6_b2WZJZQ_1pYpqhwU';
+
+      const { createClient } = supabase;
+      const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+      // ===== ตัวแปรหลัก =====
+      const input = document.getElementById('studentId');
+      const listContainer = document.getElementById('list');
+      const activeCountSpan = document.getElementById('activeCount');
+      const rankingList = document.getElementById('rankingList');
+
+      let currentActiveLogs = [];          // ข้อมูลคนที่กำลังใช้งาน (sync กับ DB)
+      let statsData = JSON.parse(localStorage.getItem('bathroomStats') || '{}');
+
+      // ===== ฟังก์ชัน Popup (เหมือนเดิม) =====
+      function createParticles(container, color) {
+        const particlesDiv = container.querySelector('.popup-particles');
+        if (!particlesDiv) return;
+        particlesDiv.innerHTML = '';
+        for (let i = 0; i < 20; i++) {
+          const p = document.createElement('div');
+          p.className = 'popup-particle';
+          const size = Math.random() * 6 + 3;
+          const angle = (Math.PI * 2 * i) / 20;
+          const dist = Math.random() * 120 + 60;
+          p.style.cssText = `
+            width: ${size}px; height: ${size}px;
+            background: ${color};
+            left: 50%; top: 40%;
+            --tx: ${Math.cos(angle) * dist}px;
+            --ty: ${Math.sin(angle) * dist}px;
+            animation-delay: ${Math.random() * 0.3}s;
+            animation-duration: ${1.5 + Math.random()}s;
+          `;
+          particlesDiv.appendChild(p);
+        }
+      }
+
+      function showBigPopup(type, name) {
+        const overlay = document.getElementById('popupOverlay');
+        const iconContainer = document.getElementById('popupIconContainer');
+        const titleDiv = document.getElementById('popupTitle');
+        const subDiv = document.getElementById('popupSubtitle');
+        const popupBox = overlay.querySelector('.popup-box');
+
+        const successIconHtml = `<i class="ph-fill ph-check-circle popup-icon success-icon-animated"></i>`;
+        const errorIconHtml = `<i class="ph-fill ph-warning-circle popup-icon" style="color:#f87171; filter:drop-shadow(0 0 15px rgba(248,113,113,0.4));"></i>`;
+
+        if (type === 'go') {
+          iconContainer.innerHTML = successIconHtml;
+          titleDiv.innerHTML = "บันทึกสำเร็จ!";
+          subDiv.innerHTML = `เชิญคุณ <span class="popup-highlight">${name}</span><br>ไปเข้าห้องน้ำได้ครับ`;
+          createParticles(popupBox, 'rgba(52, 211, 153, 0.6)');
+        } else if (type === 'back') {
+          iconContainer.innerHTML = successIconHtml;
+          titleDiv.innerHTML = "ยินดีต้อนรับกลับ";
+          subDiv.innerHTML = `คุณ <span class="popup-highlight">${name}</span><br>กลับมาเรียบร้อยแล้ว`;
+          createParticles(popupBox, 'rgba(129, 140, 248, 0.6)');
+        } else if (type === 'error') {
+          iconContainer.innerHTML = errorIconHtml;
+          titleDiv.innerHTML = "เกิดข้อผิดพลาด";
+          subDiv.innerHTML = name;
+        }
+
+        overlay.classList.add('show');
+        setTimeout(() => {
+          overlay.classList.remove('show');
+          setTimeout(() => { iconContainer.innerHTML = ""; }, 300);
+        }, 3000);
+      }
+
+      // ===== นาฬิกา =====
+      function updateClock() {
+        const now = new Date();
+        const h = String(now.getHours()).padStart(2, '0');
+        const m = String(now.getMinutes()).padStart(2, '0');
+        document.getElementById('liveClock').textContent = `${h}:${m}`;
+        document.getElementById('liveDate').textContent = now.toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long' });
+      }
+      setInterval(updateClock, 1000);
+      window.onload = updateClock;
+
+      // ===== ดึงข้อมูลคนที่กำลังใช้งาน (check_out IS NULL) =====
+      async function fetchActiveLogs() {
+        const { data, error } = await supabaseClient
+          .from('bathroom_logs')
+          .select(`
+            id,
+            student_id,
+            check_in,
+            students ( name, class )
+          `)
+          .is('check_out', null)
+          .order('check_in', { ascending: false });
+
+        if (error) {
+          console.error('fetchActiveLogs error:', error);
+          return;
+        }
+
+        // แปลงให้ renderActiveList ใช้ field timeOut เป็น timestamp
+        currentActiveLogs = data.map(item => ({
+          id: item.id,
+          student_id: item.student_id,
+          name: item.students.name,
+          class: item.students.class,
+          timeOut: new Date(item.check_in).getTime()
+        }));
+
+        renderActiveList();
+      }
+
+      // ===== แสดงรายชื่อที่กำลังใช้งาน =====
+      function renderActiveList() {
+        listContainer.innerHTML = "";
+        activeCountSpan.textContent = currentActiveLogs.length;
+
+        if (currentActiveLogs.length === 0) {
+          listContainer.innerHTML = `
+            <div class="empty-state">
+              <i class="ph ph-smiley-wink" style="font-size:3rem; color:var(--success-green);"></i>
+              <div style="font-size:1.05rem; font-weight:400;">ห้องน้ำว่าง</div>
+              <div style="font-size:0.85rem; font-weight:300; margin-top:4px;">เชิญใช้งานครับ</div>
+            </div>`;
+          return;
+        }
+
+        currentActiveLogs.forEach((data, index) => {
+          const minutes = Math.floor((Date.now() - data.timeOut) / 60000);
+          const isLate = minutes >= 15;
+
+          const div = document.createElement("div");
+          div.className = "student-card";
+          div.style.animationDelay = `${index * 0.05}s`;
+          if (isLate) div.style.borderColor = "rgba(248,113,113,0.2)";
+
+          div.innerHTML = `
+            <div class="card-info">
+              <div class="avatar-placeholder" style="${isLate ? 'background:rgba(248,113,113,0.1); color:#f87171; border-color:rgba(248,113,113,0.2)' : ''}">
+                 <i class="ph-bold ph-user"></i>
+              </div>
+              <div>
+                <div class="student-name">${data.name}</div>
+                <div class="student-class">ม.${data.class}</div>
+              </div>
+            </div>
+            <div>
+              <div class="time-val" style="${isLate ? 'color:#f87171' : ''}">${minutes} <span style="font-size:0.75rem; color:var(--text-muted); font-weight:300;">นาที</span></div>
+              <div class="status-pill ${isLate ? 'status-late' : 'status-ok'}" style="float:right;">
+                ${isLate ? 'นานเกิน' : 'กำลังใช้'}
+              </div>
+            </div>
+          `;
+
+          // คลิกการ์ด = check-out
+          div.onclick = async () => {
+            try {
+              await supabaseClient
+                .from('bathroom_logs')
+                .update({ check_out: new Date().toISOString() })
+                .eq('id', data.id);
+
+              // อัปเดตสถิติ localStorage
+              const key = data.name;
+              statsData[key] = (statsData[key] || 0) + 1;
+              localStorage.setItem('bathroomStats', JSON.stringify(statsData));
+              renderRanking();
+
+              showBigPopup('back', data.name);
+            } catch (err) {
+              console.error(err);
+              showBigPopup('error', 'เกิดข้อผิดพลาดในการบันทึก');
+            }
+          };
+
+          listContainer.appendChild(div);
+        });
+      }
+
+      // ===== แสดง 5 อันดับ =====
+      function renderRanking() {
+        let rankArray = Object.keys(statsData).map(key => ({ name: key, count: statsData[key] }));
+        rankArray.sort((a, b) => b.count - a.count);
+        const top5 = rankArray.slice(0, 5);
+
+        if (top5.length === 0) {
+          rankingList.innerHTML = `<div style="text-align:center; color:rgba(255,255,255,0.2); font-size:0.9rem; padding:20px; font-weight:300;">— ยังไม่มีข้อมูล —</div>`;
+          return;
+        }
+
+        rankingList.innerHTML = top5.map((item, index) => {
+          const rankClass = index === 0 ? 'rank-1' : (index === 1 ? 'rank-2' : (index === 2 ? 'rank-3' : ''));
+          return `
+            <div class="ranking-item">
+              <div style="display:flex; align-items:center;">
+                <div class="rank-num ${rankClass}">${index + 1}</div>
+                <span style="font-weight:400; font-size:0.95rem;">${item.name}</span>
+              </div>
+              <span style="font-weight:600; color:var(--primary); font-size:0.9rem;">${item.count} <span style="font-weight:300; font-size:0.8rem;">ครั้ง</span></span>
+            </div>
+          `;
+        }).join('');
+      }
+
+      // ===== ฟังก์ชันเพิ่มนักเรียน (check-in) =====
+      window.addStudent = async function () {
+        const id = input.value.trim();
+        if (!id) return;
+
+        const btn = document.querySelector('.btn-submit');
+        const originalContent = btn.innerHTML;
+        btn.innerHTML = '<i class="ph-bold ph-spinner ph-spin"></i>';
+
+        try {
+          // 1. ตรวจสอบว่านักเรียนมีอยู่ในตาราง students หรือไม่
+          const { data: student, error: studentError } = await supabaseClient
+            .from('students')
+            .select('name, class')
+            .eq('student_id', id)          // ใช้ student_id ตามที่คุณสร้าง
+            .single();
+
+          if (studentError || !student) {
+            showBigPopup('error', 'ไม่พบรหัสนักเรียน');
+            return;
+          }
+
+          // 2. ตรวจสอบว่ากำลังอยู่ในห้องน้ำหรือไม่
+          const existing = currentActiveLogs.find(log => log.student_id === id);
+          if (existing) {
+            showBigPopup('error', `${student.name} <br>อยู่ในห้องน้ำแล้ว`);
+            return;
+          }
+
+          // 3. บันทึก check-in
+          const { error: insertError } = await supabaseClient
+            .from('bathroom_logs')
+            .insert({
+              student_id: id,
+              check_in: new Date().toISOString()
+            });
+
+          if (insertError) throw insertError;
+
+          showBigPopup('go', student.name);
+
+        } catch (error) {
+          console.error(error);
+          showBigPopup('error', 'เชื่อมต่อล้มเหลว');
+        } finally {
+          input.value = "";
+          btn.innerHTML = originalContent;
+          input.focus();
+        }
+      };
+
+      // กด Enter
+      input.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") window.addStudent();
+      });
+
+      // ล้างสถิติ
+      window.clearStats = () => {
+        if (confirm("ล้างอันดับทั้งหมด?")) {
+          statsData = {};
+          localStorage.setItem('bathroomStats', '{}');
+          renderRanking();
+        }
+      };
+
+      // กลับเมนูหลัก (เปลี่ยนลิงก์ให้ตรงกับของคุณ)
+      window.goToMainMenu = function () {
+        window.location.href = 'https://bathroom-check-system.web.app/all.html';
+      };
+
+      // ===== Realtime subscription =====
+      const subscription = supabaseClient
+        .channel('bathroom_logs_changes')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'bathroom_logs' },
+          () => fetchActiveLogs()
+        )
+        .subscribe();
+
+      // โหลดข้อมูลครั้งแรก
+      fetchActiveLogs();
+      renderRanking();
+
+      // โหลดซ้ำทุก 10 วินาที (เผื่อ subscription หลุด)
+      setInterval(fetchActiveLogs, 10000);
+
+      // เอฟเฟกต์โลโก้
+      document.querySelector('.logo-container').addEventListener('mouseenter', function() {
+        this.querySelector('.logo-3d').style.animationPlayState = 'paused';
+      });
+      document.querySelector('.logo-container').addEventListener('mouseleave', function() {
+        this.querySelector('.logo-3d').style.animationPlayState = 'running';
+      });
+
+    })();
+  </script>
+</body>
+
+</html>
