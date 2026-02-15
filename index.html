@@ -417,6 +417,20 @@
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+    /* CSS สำหรับรูปภาพ */
+    .avatar-image {
+      width: 46px;
+      height: 46px;
+      border-radius: 14px;
+      object-fit: cover;
+      border: 1px solid rgba(var(--primary-rgb), 0.15);
+      transition: all 0.3s ease;
+    }
+    .avatar-image:hover {
+      transform: scale(1.05);
+      border-color: var(--primary);
+    }
   </style>
 </head>
 
@@ -589,7 +603,7 @@
             id,
             student_id,
             check_in,
-            students ( name, class )
+            students ( name, class, avatar_url )
           `)
           .is('check_out', null)
           .order('check_in', { ascending: false });
@@ -605,6 +619,7 @@
           student_id: item.student_id,
           name: item.students.name,
           class: item.students.class,
+          avatar_url: item.students.avatar_url,
           timeOut: new Date(item.check_in).getTime()
         }));
 
@@ -637,9 +652,12 @@
 
           div.innerHTML = `
             <div class="card-info">
-              <div class="avatar-placeholder" style="${isLate ? 'background:rgba(248,113,113,0.1); color:#f87171; border-color:rgba(248,113,113,0.2)' : ''}">
-                 <i class="ph-bold ph-user"></i>
-              </div>
+              ${data.avatar_url ? 
+                `<img src="${data.avatar_url}" class="avatar-image">` :
+                `<div class="avatar-placeholder" style="${isLate ? 'background:rgba(248,113,113,0.1); color:#f87171; border-color:rgba(248,113,113,0.2)' : ''}">
+                   <i class="ph-bold ph-user"></i>
+                 </div>`
+              }
               <div>
                 <div class="student-name">${data.name}</div>
                 <div class="student-class">${data.class}</div>
@@ -717,7 +735,7 @@
           const { data: student, error: studentError } = await supabaseClient
             .from('students')
             .select('name, class')
-            .eq('student_id', id)          // ใช้ student_id ตามที่คุณสร้าง
+            .eq('student_id', id)
             .single();
 
           if (studentError || !student) {
